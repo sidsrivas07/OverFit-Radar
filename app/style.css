@@ -1,0 +1,30 @@
+/* Overfit Radar dashboard theme. Native widgets remain keyboard accessible. */
+:root { --radar-bg:#0a1020; --radar-panel:#111b2d; --radar-line:#23364d; --radar-text:#eaf4fa; --radar-muted:#8ea4b6; --radar-green:#49dbc4; }
+.stApp { background:radial-gradient(circle at 54% -12%, #173147 0, #0a1020 38%, #080e1a 100%); color:var(--radar-text); }
+header[data-testid="stHeader"] { background: transparent; }
+.block-container { max-width:1640px; padding-top:4.75rem; padding-bottom:3rem; }
+[data-testid="stTabs"] { margin-top:0.25rem; margin-bottom:0.75rem; }
+section[data-testid="stSidebar"] { background:#0d1829; border-right:1px solid #22354a; }
+section[data-testid="stSidebar"] > div { padding-top:1.2rem; }
+[data-testid="stSidebar"] h1 { font-size:1.45rem; letter-spacing:-.03em; }
+[data-testid="stSidebar"] .stCaption { color:var(--radar-muted); }
+[data-testid="stTabs"] [data-baseweb="tab-list"] { background:#0d1829; border:1px solid var(--radar-line); border-radius:12px; padding:5px; gap:3px; }
+[data-testid="stTabs"] button { border-radius:8px; font-size:.9rem; font-weight:600; color:#9db1c1; padding:.65rem 1rem; }
+[data-testid="stTabs"] button[aria-selected="true"] { background:#17354a; color:#65ead5; }
+[data-testid="stTabs"] [data-baseweb="tab-highlight"], [data-testid="stTabs"] [data-baseweb="tab-border"] { display:none; }
+[data-testid="stMetric"] { background:linear-gradient(155deg,#13243a,#101b2c); border:1px solid #25405a; border-radius:14px; padding:16px 18px; min-height:118px; box-shadow:0 12px 28px #0002; }
+[data-testid="stMetricLabel"] { color:#a8bdca; font-size:.82rem; }
+[data-testid="stMetricValue"] { font-size:clamp(1.45rem,2.1vw,2rem); color:#effbff; letter-spacing:-.04em; }
+[data-testid="stVerticalBlockBorderWrapper"] > div { border-color:var(--radar-line)!important; }
+[data-testid="stDataFrame"] { border-radius:12px; overflow:hidden; }
+.stButton button[kind="primary"], [data-testid="stDownloadButton"] button { background:#197d75; border:1px solid #46dbc4; color:#f7fffd; border-radius:10px; font-weight:700; }
+.stButton button[kind="primary"]:hover, [data-testid="stDownloadButton"] button:hover { background:#229b8e; color:#fff; }
+[data-testid="stAlert"] { border-radius:10px; }
+.radar-hero { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:20px 22px; margin:0 0 14px; background:linear-gradient(105deg,#132b3d,#101c2e 68%,#112538); border:1px solid #2b4b60; border-radius:16px; }
+.radar-kicker { color:#53dcc7; font-size:.72rem; font-weight:800; letter-spacing:.15em; text-transform:uppercase; }
+.radar-title { font-size:clamp(1.35rem,2.5vw,2.1rem); font-weight:750; letter-spacing:-.035em; line-height:1.2; margin:.2rem 0 .35rem; }
+.radar-sub { color:#a4b9c8; font-size:.88rem; line-height:1.45; }
+.radar-status { flex:none; color:#91eddc; background:#103d3e; border:1px solid #286a68; border-radius:999px; padding:7px 11px; font-size:.73rem; font-weight:700; }
+.radar-section { color:#b7cad6; font-size:.74rem; letter-spacing:.14em; text-transform:uppercase; font-weight:800; margin:1.2rem 0 .5rem; }
+.radar-note { background:#112035; border-left:3px solid #49dbc4; color:#b7c9d6; padding:10px 14px; border-radius:0 9px 9px 0; font-size:.83rem; line-height:1.45; margin:.5rem 0 1rem; }
+@media(max-width:750px){ .block-container{padding:4.5rem .8rem 2rem} .radar-hero{align-items:flex-start;flex-direction:column;padding:16px}.radar-status{align-self:flex-start} [data-testid="stTabs"] button{font-size:.76rem;padding:.5rem .6rem} [data-testid="stMetric"]{min-height:100px;padding:12px} }

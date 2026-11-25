@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from html import escape
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -21,6 +22,28 @@ ROOT=get_project_root()
 RESULTS=Path(os.environ.get('OVERFIT_RESULTS_DIR',str(ROOT/'data/models_v1')))
 PROTOCOL=load_yaml(ROOT/'configs/protocol.yaml')
 FINAL_START=pd.Timestamp(PROTOCOL['splits']['final_start'])
+st.markdown('<style>' + (Path(__file__).with_name('style.css')).read_text() + '</style>', unsafe_allow_html=True)
+
+
+def hero(kicker: str, title: str, subtitle: str, status: str) -> None:
+    """A compact overview for each research surface."""
+    st.markdown(
+        f'<div class="radar-hero"><div><div class="radar-kicker">{escape(kicker)}</div>'
+        f'<div class="radar-title">{escape(title)}</div><div class="radar-sub">{escape(subtitle)}</div>'
+        f'</div><div class="radar-status">{escape(status)}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def dark_axes(ax, fig) -> None:
+    """Use the same legible dark palette for all embedded research charts."""
+    fig.patch.set_facecolor('#111b2d');ax.set_facecolor('#111b2d')
+    ax.tick_params(colors='#a7bac8',labelsize=9)
+    ax.xaxis.label.set_color('#a7bac8');ax.yaxis.label.set_color('#a7bac8')
+    ax.title.set_color('#eaf4fa')
+    for spine in ax.spines.values():spine.set_color('#30485e')
+    ax.grid(color='#344d63',alpha=.35,linewidth=.7)
+
 
 
 def read_json(path: Path):
@@ -29,7 +52,7 @@ def read_json(path: Path):
 
 
 def research_results():
-    st.header('Development research results')
+    hero('Research / archived evaluation','Development results','Measured across the sample universe; independent of the selected stock.','FINAL PERIOD RESERVED')
     st.caption('Saved experiments across the sample universe; independent of the stock selected in the sidebar. All results are under assumed cost levels. The final period is unevaluated.')
     rows=read_json(RESULTS/'summary.json')
     if rows is None:
@@ -54,14 +77,14 @@ def research_results():
         label='survived_'+level
         if label in predictions:
             st.subheader('Reliability diagram')
-            fig,ax=plt.subplots(figsize=(7,4));ax.plot([0,1],[0,1],'--',color='grey',label='Perfect agreement')
+            fig,ax=plt.subplots(figsize=(7,4));dark_axes(ax,fig);ax.plot([0,1],[0,1],'--',color='#8aa0b2',label='Perfect agreement')
             for method in ['lightgbm_full_raw','lightgbm_full_calibrated','logistic_full_raw','logistic_full_calibrated']:
                 if method not in predictions:continue
                 points=predictions[[method,label]].dropna().copy()
                 points['bin']=np.minimum((points[method]*10).astype(int),9)
                 grouped=points.groupby('bin')[[method,label]].mean()
                 ax.plot(grouped[method],grouped[label],marker='o',label=method)
-            ax.set_xlabel('Mean predicted probability');ax.set_ylabel('Observed survival fraction');ax.legend(fontsize=7)
+            ax.set_xlabel('Mean predicted probability');ax.set_ylabel('Observed survival fraction');ax.legend(fontsize=7,facecolor='#17253a',edgecolor='#30485e',labelcolor='#eaf4fa')
             st.pyplot(fig);plt.close(fig)
             st.caption('Descriptive pooled-row reliability diagram with ten equal-width bins. Correlated rows are not independent; reported metric intervals use window blocks.')
     else:
@@ -78,7 +101,7 @@ def research_results():
         st.subheader('SHAP: last development LightGBM fit')
         st.caption('Mean absolute contributions on 200 sampled rows, in raw log-odds before calibration. Magnitudes do not show direction or consistency across folds. effective_n measures dependence among trials, not parameter-neighbourhood stability.')
         importance=pd.DataFrame(importance).head(10).iloc[::-1]
-        fig,ax=plt.subplots(figsize=(10,4));ax.barh(importance.feature,importance.mean_absolute_shap)
+        fig,ax=plt.subplots(figsize=(10,4));dark_axes(ax,fig);ax.barh(importance.feature,importance.mean_absolute_shap,color='#49dbc4')
         ax.set_xlabel('Mean absolute SHAP contribution (raw log-odds)');st.pyplot(fig);plt.close(fig)
 
 
@@ -86,9 +109,10 @@ def research_results():
 def measured_audit(prices,selected,zoo,costs,cost_multiplier,start,end):
     return audit_strategy(prices,selected,zoo,BacktestEngine(costs,cost_multiplier=cost_multiplier),start,end)
 
+st.sidebar.markdown('<div class="radar-kicker">◈ QUANT RESEARCH LAB</div>',unsafe_allow_html=True)
 st.sidebar.title('Overfit Radar')
-st.sidebar.caption('Backtest and research-results demonstrator')
-tabs=st.tabs(['Strategy backtest','Parameter stability','Statistical audit','Research benchmarks'])
+st.sidebar.caption('Strategy robustness · Indian equities')
+tabs=st.tabs(['◉  Overview','▦  Parameter map','◇  Statistical audit','▥  Research'])
 with tabs[3]:research_results()
 paths=sorted((ROOT/'data/raw').glob('*.parquet'))
 if not paths:
@@ -134,7 +158,7 @@ else:
     selected=StrategyConfig('selected','rsi_mean_reversion',dict(window=window,oversold=oversold,overbought=overbought))
 level=st.sidebar.selectbox('Assumed cost level',['base','low','high'])
 multiplier=float(PROTOCOL['cost_levels'][level]);costs=load_costs_config();engine=BacktestEngine(costs,cost_multiplier=multiplier)
-st.sidebar.caption(f'{level}: {multiplier:g}× assumed-v1. Headline DP fees excluded. These are research assumptions, not reconstructed historical Indian costs.')
+st.sidebar.caption(f'{level.upper()} · {multiplier:g}× assumed-v1. Headline DP fees excluded.')
 history=prices.iloc[:end+1]
 signal=compute_strategy_signal(history,selected)
 result=run_window(engine,history,signal,start,end)
@@ -142,21 +166,24 @@ result=run_window(engine,history,signal,start,end)
 benchmark=run_window(engine,history,pd.Series(1.,index=history.index),start,end)
 net_sharpe=calculate_sharpe(result.net_return)
 with tabs[0]:
-    st.header(f'{family} on {symbol}')
-    st.caption(f'IS exploration: {result.index[0].date()} to {result.index[-1].date()}. First bar flat, trades at subsequent opens, final close liquidated with exit costs. Prior prices may warm indicators. This chart is not an OOS result or a survival prediction.')
+    hero('Strategy / backtest',f'{family} · {symbol.replace("_NS",".NS")}',f'{result.index[0].date()} — {result.index[-1].date()} · {level.upper()} assumed costs','IS EXPLORATION')
+    st.markdown('<div class="radar-note">Exploratory IS chart. First bar flat; later trades use the next open; final holdings close with exit costs. Earlier prices may warm indicators. This is not an OOS prediction.</div>',unsafe_allow_html=True)
+    st.markdown('<div class="radar-section">Performance snapshot</div>',unsafe_allow_html=True)
     a,b,c,d=st.columns(4)
     a.metric('Gross Sharpe',f'{calculate_sharpe(result.gross_return):.2f}')
     b.metric('Net Sharpe',f'{net_sharpe:.2f}')
     c.metric('Max drawdown',f'{calculate_max_drawdown(result.net_return):.1%}')
     d.metric('Completed trades',str(int(result.sell_count.sum())))
-    st.caption(f'Annual turnover: {(result.buy_count.sum()+result.sell_count.sum())/len(result)*252:.1f}×')
-    fig,ax=plt.subplots(figsize=(12,4))
-    for returns,label in [(result.gross_return,'Strategy, zero cost'),(result.net_return,'Strategy, assumed costs'),(benchmark.net_return,'Buy & hold, adjusted prices and same assumed costs')]:
-        ax.plot(returns.index,(1+returns).cumprod(),label=label)
-    ax.set_ylabel('Wealth from 1 unit');ax.legend();ax.grid(alpha=.2);st.pyplot(fig);plt.close(fig)
+    st.caption(f'Annual turnover: {(result.buy_count.sum()+result.sell_count.sum())/len(result)*252:.1f}× · under assumed cost levels')
+    st.markdown('<div class="radar-section">Equity curves</div>',unsafe_allow_html=True)
+    fig,ax=plt.subplots(figsize=(12,4));dark_axes(ax,fig)
+    for returns,label in [(result.gross_return,'Gross strategy'),(result.net_return,'Net strategy'),(benchmark.net_return,'Buy & hold · adjusted / same costs')]:
+        color={'Gross strategy':'#74a8d8','Net strategy':'#49dbc4','Buy & hold · adjusted / same costs':'#d9b56e'}[label]
+        ax.plot(returns.index,(1+returns).cumprod(),label=label,color=color,linewidth=1.8 if label!='Net strategy' else 2.3)
+    ax.set_ylabel('Wealth from 1 unit');ax.legend(facecolor='#17253a',edgecolor='#30485e',labelcolor='#eaf4fa',fontsize=8,loc='upper left');fig.tight_layout();st.pyplot(fig,width="stretch");plt.close(fig)
 
 with tabs[1]:
-    st.header('Parameter stability in the selected IS period')
+    hero('Diagnostics / parameter surface','Plateau or spike?',f'{family} · {symbol.replace("_NS",".NS")}', 'IS ONLY')
     st.caption('Neighbourhood performance is a diagnostic. A plateau does not establish an edge, and a spike alone does not prove overfitting.')
     if family!='SMA Crossover':st.info('The parameter surface currently supports SMA crossover.')
     else:
@@ -171,13 +198,13 @@ with tabs[1]:
                 surface[i,j]=calculate_sharpe(res.net_return)
         if not np.isfinite(surface).any():st.info('No valid neighbourhood configurations are available.')
         else:
-            fig,ax=plt.subplots(figsize=(8,4));img=ax.matshow(np.ma.masked_invalid(surface),cmap='coolwarm');fig.colorbar(img)
+            fig,ax=plt.subplots(figsize=(8,4));dark_axes(ax,fig);img=ax.matshow(np.ma.masked_invalid(surface),cmap='RdYlGn',vmin=-2,vmax=2);cb=fig.colorbar(img);cb.ax.tick_params(colors='#a7bac8')
             ax.set_xticks(range(len(slow_range)));ax.set_xticklabels(slow_range);ax.set_yticks(range(len(fast_range)));ax.set_yticklabels(fast_range)
-            ax.set_xlabel('Slow window');ax.set_ylabel('Fast window');st.pyplot(fig);plt.close(fig)
+            ax.set_xlabel('Slow window');ax.set_ylabel('Fast window');fig.tight_layout();st.pyplot(fig,width="stretch");plt.close(fig)
             a,b=st.columns(2);a.metric('Neighbourhood mean Sharpe',f'{np.nanmean(surface):.2f}');b.metric('Sharpe above neighbourhood mean',f'{net_sharpe-np.nanmean(surface):.2f}')
 
 with tabs[2]:
-    st.header('Measured PSR / DSR audit')
+    hero('Statistics / multiple testing','Measured PSR & DSR','Trial variance is computed from the configured grid for this IS period.', 'IS ONLY')
     st.write('The audit measures per-period Sharpe variance across the configured strategy grid on this same IS period and assumed cost level. An off-grid selected configuration is added once. The count does not include unrecorded research trials.')
     if st.button('Compute measured audit'):
         with st.spinner('Evaluating the declared trial grid…'):
