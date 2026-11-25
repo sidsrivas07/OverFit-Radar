@@ -60,3 +60,7 @@ scripts/__pycache__/
 .idea/
 .vscode/
 *.swp
+
+# Fresh versioned experiments and local plotting cache
+data/runs/
+.cache/

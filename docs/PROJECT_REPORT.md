@@ -1,161 +1,155 @@
-# Overfit Radar: A Meta-Machine Learning Framework for Auditing Quantitative Trading Strategies and Mitigating Backtest Overfitting in Indian Equity Markets
+# Overfit Radar: development research report
 
-**Academic Project Report**  
-*Course:* Machine Learning / Quantitative Finance Project Showcase  
-*Date of Submission:* November 2026  
+This report describes the archived `data/models_v1` experiment. All results are
+**under assumed cost levels**. It does not report a final-test result or establish
+future profitability. The current app and accounting refactor have additional
+regression checks; archived experiments have not been rerun under the new source hash.
 
----
+## Research question and scope
 
-## Executive Summary & Abstract
+Can IS-only features predict whether a long-or-flat daily equity strategy has
+positive net OOS Sharpe, and do those predictions improve selection over IS Sharpe,
+DSR and a seeded random ranking? The frozen grid has 494 settings across six families.
+The cached research snapshot has twelve large-cap symbols, not all Nifty 50 members.
+Its static universe creates survivorship bias.
 
-A notorious challenge in quantitative finance and algorithmic trading is **backtest overfitting** (data snooping and selection bias). Researchers frequently test hundreds or thousands of parameter combinations until an attractive historical equity curve emerges—a statistical artifact that almost invariably collapses upon deployment in live markets. Standard retail machine learning projects compound this failure by naively attempting to predict non-stationary stock prices directly via neural networks, completely disregarding market frictions, bid-ask spreads, and execution delays.
+The archived table has 122,686 eligible strategy/symbol/window rows and 24 generated
+windows. Model evaluation uses eleven eligible primary development windows. The
+baseline run has fourteen primary folds and eighty-four family holdout folds; the
+model run has eighty-eight eligible folds across primary, family and symbol holdout
+experiments. These are supervised forward folds, not CSCV partitions.
 
-This project introduces **Overfit Radar**, an institutional-grade Meta-Machine Learning auditor designed specifically for Indian cash equity markets (NSE large-caps). Rather than predicting future prices, Overfit Radar evaluates the **statistical and topological characteristics of in-sample backtests** to predict whether a trading strategy will achieve positive net performance out-of-sample ($P(\text{OOS Sharpe}_{\text{net}} > 0)$). 
+## Cost and execution assumptions
 
-The system features:
-1. **Friction-Aware Execution:** Strict $t+1$ Open execution timing that entirely eliminates close-to-close lookahead bias, combined with realistic Indian statutory cost modeling (Securities Transaction Tax, Stamp Duty, Exchange Turnover Charges, SEBI fees, GST, and market impact slippage).
-2. **Advanced Statistical Forensics:** Implementation of Marcos López de Prado's **Deflated Sharpe Ratio (DSR)** using Extreme Value Theory with hierarchical correlation clustering to determine the effective number of independent trials ($N_{\text{eff}}$), alongside Combinatorial Symmetric Cross-Validation (CSCV) for the **Probability of Backtest Overfitting (PBO)**.
-3. **Parameter Topology Analysis:** Formulation of **Parameter Neighbourhood Stability** metrics that differentiate robust parameter "plateaus" from fragile, overfitted "spikes".
-4. **Calibrated Meta-Learning:** Forward walk-forward cross-validation with purged label embargos, training regularized Logistic Regression and LightGBM models with post-hoc Platt sigmoid calibration, explained via SHAP (SHapley Additive exPlanations).
+The frozen `assumed-v1` YAML contains dated approximate inputs. It is not a verified
+history of Indian statutory charges. Low/base/high multiply the assumed proportional
+costs by 0.5/1/2, including slippage. These multipliers are not claims about actual
+institutional or retail tax schedules. Headline DP fees are excluded. A separate
+DP sensitivity uses fixed sell notionals of ₹10,000, ₹50,000 and ₹1,00,000.
 
----
+Signals are computed at the close, with ordinary executions at the next open.
+Each evaluated IS and OOS window starts flat for its first bar. Execution begins
+from the second open and any remaining position closes at the last close with
+exit costs. Indicators and signal state may use earlier prices; execution positions
+are reset. A last-day buy followed by closing liquidation counts as two executions.
 
-## 1. Problem Statement & Motivation
+The app and dataset now share this boundary accounting. The app's Buy & Hold uses
+the same adjusted price basis, execution dates and assumed costs. Demo exploration
+is restricted to dates before the reserved cutoff, 2022-01-01. Its charts are IS
+illustrations, not independent OOS evaluations.
 
-### 1.1 The Backtest Overfitting Crisis
-In algorithmic trading, when an analyst evaluates $N$ strategy variations (e.g., across technical indicator lookbacks, stop-loss percentages, or momentum filters), the maximum observed In-Sample Sharpe Ratio ($\max_{n=1\dots N} \{SR_n\}$) increases strictly as a function of $N$, even if all tested strategies possess zero true predictive alpha. This phenomenon is known as **Selection Bias under Multiple Testing** or **p-hacking**.
+## Statistical methods
 
-### 1.2 The Failure of Naive "Stock Prediction" ML Projects
-Common machine learning projects that use LSTMs or Regression models to predict tomorrow's closing price suffer from fatal flaws:
-* **Market Efficiency & Low Signal-to-Noise Ratio:** Daily asset prices are near-martingales; past price patterns explain an infinitesimal fraction of variance.
-* **The Cost Mirage:** A strategy generating +15% gross annualized returns will generate -25% net returns if it turns over capital rapidly under real-world transaction taxes (STT, slippage, GST).
-* **Lookahead and Information Leakage:** Computing signals on day $t$ close and executing at day $t$ close is physically impossible and artificially inflates backtest returns.
+Sharpe uses per-period mean divided by sample standard deviation; annualized Sharpe
+multiplies by sqrt(252). PSR uses the nonannualized Sharpe, sample length, skewness
+and Pearson/non-excess kurtosis:
 
-**Overfit Radar solves this by shifting the paradigm from *Predicting Market Direction* to *Auditing Strategy Fragility*.**
-
----
-
-## 2. Mathematical & Theoretical Foundations
-
-```mermaid
-flowchart TD
-    A["Raw Strategy Zoo (494 Grid Configurations)"] --> B["NSE Cash Equities Daily OHLCV"]
-    B --> C["Vectorized Backtest Engine (t+1 Open Fill)"]
-    C --> D["Indian Friction Schedule (STT, GST, Stamp, Slippage)"]
-    D --> E["In-Sample Feature Extraction (IS Months = 36)"]
-    
-    subgraph "Statistical Forensics"
-        E --> F1["Probabilistic Sharpe Ratio (PSR)"]
-        E --> F2["Deflated Sharpe Ratio (DSR with N_eff)"]
-        E --> F3["Parameter Neighbourhood Stability (Plateau vs. Spike)"]
-        E --> F4["Higher Moments (Skewness & Kurtosis)"]
-    end
-    
-    subgraph "Purged Forward Validation"
-        F1 & F2 & F3 & F4 --> G["Purged Walk-Forward Partitioning (21-Day Embargo)"]
-        G --> H1["Sigmoid-Calibrated LightGBM"]
-        G --> H2["L2-Regularized Logistic Regression"]
-    end
-    
-    H1 & H2 --> I["SHAP TreeExplainer Attribution"]
-    I --> J["Out-of-Sample Survival Probability P(OOS Sharpe > 0)"]
+```
+PSR = Phi((SR_hat - SR*) * sqrt(T-1)
+          / sqrt(1 - skew*SR_hat + (kurtosis-1)*SR_hat**2/4))
 ```
 
-### 2.1 Probabilistic Sharpe Ratio (PSR)
-Standard Sharpe ratio confidence intervals assume normal, independent and identically distributed (i.i.d.) returns. Financial asset returns, however, exhibit fat tails (leptokurtosis) and negative asymmetry (skewness). The Probabilistic Sharpe Ratio evaluates the probability that an estimated Sharpe ratio ($\widehat{SR}$) exceeds a benchmark threshold $SR^*$, explicitly adjusting for return sample length $T$, skewness $\gamma_3$, and non-excess kurtosis $\gamma_4$:
+DSR evaluates PSR at an expected-maximum-Sharpe benchmark computed from the variance
+of trial Sharpes and number of trials. The app now measures that variance from the
+configured grid on the same IS bars and cost level as the selected strategy. A
+selected off-grid setting is added once. Raw N is this declared search set; it does
+not account for unrecorded research choices. Constant selected returns do not receive
+a PSR/DSR verdict.
 
-$$\text{PSR}(SR^*) = \Phi\left( \frac{(\widehat{SR} - SR^*)\sqrt{T-1}}{\sqrt{1 - \gamma_3 \widehat{SR} + \frac{\gamma_4 - 1}{4}\widehat{SR}^2}} \right)$$
+Effective N uses average-linkage hierarchical clustering with distance
+`sqrt(0.5 * (1 - correlation))`, cut at the configured correlation threshold
+(default 0.5). Constant return series are excluded from that estimate. This is a
+heuristic measure of trial dependence, not an exact independence count and not the
+parameter-neighbourhood feature.
 
-where $\Phi(\cdot)$ denotes the standard normal cumulative distribution function.
+Neighbourhood features compute IS Sharpe mean, sample standard deviation and selected
+Sharpe minus local mean across the candidate plus adjacent grid settings. A plateau
+or spike is descriptive; neither proves robustness or overfitting.
 
-### 2.2 Deflated Sharpe Ratio (DSR) & Multiple Testing
-Under the null hypothesis that all $N$ examined strategies have an expected Sharpe ratio of zero, the expected maximum Sharpe ratio across $N$ trials is derived from Extreme Value Theory (Bailey & López de Prado, 2014):
+CSCV/PBO is a separate selection-process diagnostic: equal time blocks are recombined,
+the IS winner is chosen using an explicit performance metric, and its OOS rank is
+converted to a logit. The implementation defaults to Sharpe, supports mean ranking,
+and marks capped runs approximate. The supervised dataset itself is built using
+rolling IS/embargo/OOS windows, not CSCV.
 
-$$\mathbb{E}\left[\max_{n=1\dots N} \{SR_n\}\right] \approx \sqrt{\mathbb{V}[SR_n]} \left( (1-\gamma)\Phi^{-1}\left(1-\frac{1}{N}\right) + \gamma\Phi^{-1}\left(1-\frac{1}{N e}\right) \right)$$
+## Supervised validation
 
-where $\gamma \approx 0.57721566...$ is the **Euler-Mascheroni constant**, $e$ is Euler's number, and $\mathbb{V}[SR_n]$ is the cross-sectional variance of the per-period Sharpe ratios.
+IS windows use 756 bars, OOS windows 252, a 21-bar within-row gap and 126-bar steps.
+Adjacent labels overlap. The primary ML split permits training rows only if their
+OOS end is strictly before test OOS start. Family holdout is a secondary experiment.
+The latest available mature training window is reserved for sigmoid calibration;
+fitting labels must end before that calibration window begins. Early folds without
+enough fitting/calibration history are skipped and recorded.
 
-The **Deflated Sharpe Ratio (DSR)** computes the PSR evaluated at this multiple-testing benchmark:
-$$\text{DSR} = \text{PSR}\left(SR^* = \mathbb{E}\left[\max_{n=1\dots N} \{SR_n\}\right]\right)$$
+Models are regularized logistic regression and LightGBM with fixed settings and
+no evaluation-driven hyperparameter search. The full and neighbourhood-ablated
+versions use matched folds. Transformations fit only on fitting rows. An explicit
+feature whitelist excludes OOS targets, symbol identifiers and dates.
 
-#### Cluster-Based Effective Number of Trials ($N_{\text{eff}}$)
-Because quantitative trading strategies share similar logic (e.g., SMA-10/50 is correlated with SMA-12/50), setting $N$ to the raw number of strategies artificially inflates the hurdle. Overfit Radar applies **hierarchical agglomerative clustering** on the correlation matrix of strategy returns using Ward's linkage:
-$$d(i, j) = \sqrt{2(1 - \rho_{i,j})}$$
-The number of distinct clusters formed at distance threshold $\tau$ defines the **Effective Independent Trials ($N_{\text{eff}}$)**.
+Metrics first average symbols (and secondary held-out families) within a window,
+then average windows. Confidence intervals resample two-window circular blocks
+with 2,000 seeded replicates. This accounts for adjacent-window overlap but may not
+capture longer regime dependence. The final period is still unevaluated.
 
-### 2.3 Parameter Neighbourhood Stability (Plateau vs. Spike)
-A defining characteristic of an overfitted backtest is **parameter sensitivity**: a strategy yields a high Sharpe ratio at $(fast=12, slow=26)$ but crashes at $(11, 26)$ or $(13, 26)$. Conversely, a genuine market anomaly forms a **topological plateau**. 
+## Measured development results
 
-For every strategy parameter node $\theta$, we identify its immediate parameter neighbors $\mathcal{N}(\theta)$ and compute:
-1. **Neighbourhood Mean Sharpe:** $\mu_{\mathcal{N}}(\theta) = \frac{1}{|\mathcal{N}(\theta)|} \sum_{j \in \mathcal{N}(\theta)} SR_j$
-2. **Neighbourhood Dispersion:** $\sigma_{\mathcal{N}}(\theta) = \text{std}_{j \in \mathcal{N}(\theta)}(SR_j)$
-3. **Spike Excess Ratio:** $\Delta_{\text{spike}}(\theta) = SR_\theta - \mu_{\mathcal{N}}(\theta)$
+Primary experiment, base assumed costs, full calibrated models:
 
----
+| Method | AUC | Top-10 survival | Mean top-10 OOS Sharpe | Brier |
+|---|---:|---:|---:|---:|
+| IS Sharpe | 0.5497 | 65.68% | 0.4007 | — |
+| Raw DSR | 0.5505 | 65.45% | 0.4020 | — |
+| Random | 0.5012 | 63.03% | 0.3674 | — |
+| Logistic | 0.5598 | 66.06% | 0.4088 | 0.2743 |
+| LightGBM | 0.5464 | 66.06% | 0.3790 | 0.2780 |
 
-## 3. Market Mechanics & Indian Transaction Cost Architecture
+LightGBM AUC interval: 0.4941–0.5961. Its paired survival difference versus IS Sharpe
+is +0.00379 (95% interval −0.02273 to +0.02879). Its mean OOS Sharpe difference is
+−0.02178 (interval −0.14049 to +0.08351). These results do not establish superiority.
+The recorded metrics do not include OOS drawdown, so no drawdown-improvement claim
+is made. No measured 68% gross-to-net failure claim is established by these outputs.
 
-All performance claims are evaluated **net of realistic transaction costs**. The system models the historical and current statutory schedules for Indian cash equity delivery trading:
+Calibration increased observed Brier from 0.2598 to 0.2780 for LightGBM and from
+0.2451 to 0.2743 for logistic regression. Constant probability 0.5 has Brier 0.25
+regardless of binary labels. These observed comparisons do not alone establish
+statistical significance, but they do rule out claiming that calibration has
+already demonstrated reliable probabilities. The next experiment script includes
+constant-0.5 and fitting-set-prevalence references; these are not retrospectively
+inserted into the archived results.
 
-| Cost Component | Statutory Rate / Basis | Applied On |
-| :--- | :--- | :--- |
-| **Securities Transaction Tax (STT)** | 0.10% (0.001) | Buy & Sell Turnover |
-| **Stamp Duty** | 0.015% (0.00015) | Buy Turnover (standardized nationwide) |
-| **Exchange Turnover Fee (NSE)** | ~0.00345% (pre-Oct 2024) / 0.00297% (revised) | Buy & Sell Turnover |
-| **SEBI Turnover Fee** | ₹10 per crore (0.0001%) | Buy & Sell Turnover |
-| **Goods & Services Tax (GST)** | 18% on (Exchange Fee + SEBI Fee) | Brokerage & Fees |
-| **Execution Slippage** | 7.5 basis points (0.00075) | Half-spread + market impact per execution |
+The SHAP snapshot explains one last-development LightGBM fit on 200 sampled rows,
+in raw margins before calibration. `effective_n` has mean absolute contribution
+0.4013; neighbourhood mean Sharpe has 0.1653. Spike excess has 0.00180. Absolute
+values do not establish positive/negative direction, causality or consistency over
+folds. DSR is not a learned survival probability.
 
-### Execution Timing Invariant ($t+1$ Open)
-To eliminate lookahead bias:
-* Indicators and trading signals are evaluated at day $t$ Close: $S_t = f(P_1, \dots, P_t)$.
-* Position changes execute at day $t+1$ Open: $w_{t+1} = S_t$.
-* Day $t+1$ Gross Return accounts for overnight gap:
-  * On entry: $R_{t+1} = (Close_{t+1} - Open_{t+1}) / Open_{t+1}$
-  * On holding: $R_{t+1} = (Close_{t+1} - Close_t) / Close_t$
-  * On exit: $R_{t+1} = (Open_{t+1} - Close_t) / Close_t$
+## Reproduction and delivery status
 
----
+README contains complete commands using fresh versioned directories. JSON summaries
+are bundled; raw prices, training parquet, predictions and trained model binaries
+are excluded. Their absence does not imply training never happened; it means the
+checkout is a results/demo distribution rather than a complete binary experiment archive.
 
-## 4. Machine Learning System Architecture & Experimental Setup
+Dataset gates compare configuration, source and data hashes plus dataset bytes.
+The generating Git commit is provenance; documentation-only commits no longer
+invalidate unchanged inputs. A source refactor still requires a fresh versioned
+dataset before a new training run. Archived manifests remain untouched.
 
-### 4.1 Walk-Forward Rolling Splits with Purging & Embargo
-To evaluate out-of-sample performance without future information leakage:
-* **In-Sample (IS) Window:** 36 months (~756 trading sessions) for strategy signal generation and feature extraction.
-* **Embargo Buffer:** 21 market days between IS and OOS to prevent serial correlation spillover.
-* **Out-of-Sample (OOS) Window:** 12 months (~252 trading sessions) for evaluating realized forward performance.
-* **Purged Forward Folds:** A training sample is eligible for model fitting only if its Out-of-Sample evaluation period terminates strictly before the test sample's prediction date ($\text{OOS\_End}_{\text{train}} < \text{OOS\_Start}_{\text{test}}$).
+The app provides measured IS audits, parameter surfaces and filtered research tables.
+It does not currently perform trained-model inference on a chosen stock. Returns-CSV
+uploads and PDF exports are not implemented. An audit can be exported as JSON.
 
-### 4.2 Supervised Learning Formulation
-* **Target Label:** Binary survival indicator:
-  $$y_i = \mathbb{I}\left( \text{OOS Sharpe}_{\text{net}} > 0.0 \right)$$
-* **Model Topologies:**
-  1. **L2-Regularized Logistic Regression:** Scaled features with median imputation.
-  2. **LightGBM Classifier:** Gradient boosted trees with leaf-wise expansion, restricted depth ($depth=5$, $leaves=15$, $min\_child\_samples=100$) to prevent second-order overfitting on the meta-features.
-* **Post-Hoc Probability Calibration:** Raw model outputs undergo Platt Sigmoid Calibration fitted on the most recent mature calibration window.
-* **Interpretability Engine:** SHAP (SHapley Additive exPlanations) values computed via TreeExplainer on tree margins.
+## Limitations
 
----
+Survivorship bias, approximate costs, assumed slippage, dependence among trials,
+regime changes, small number of development windows, single-window calibration,
+and incomplete original download timestamps. All conclusions apply to the tested
+strategies and periods under assumed cost levels. Final evaluation remains a
+separate, one-time step after research choices are frozen.
 
-## 5. Summary of Empirical Findings & Key Insights
+## References
 
-1. **Transaction Frictions Eliminate Naive Momentum:** Over 68% of technical trading strategies exhibiting positive gross In-Sample Sharpe ratios produce negative net Sharpe ratios under statutory Indian costs. High-turnover strategies are the most severely impacted.
-2. **DSR Outperforms In-Sample Sharpe:** Ranking strategies by Deflated Sharpe Ratio (DSR) significantly reduces out-of-sample drawdown compared to standard In-Sample Sharpe selection.
-3. **The Importance of Parameter Plateaus:** In the SHAP feature importance analysis, `neighbourhood_spike_excess` is consistently ranked among the strongest negative predictors of out-of-sample survival. Strategies that drastically outperform their immediate parameter neighbors decay rapidly out-of-sample.
-
----
-
-## 6. Limitations & Future Extensions
-
-* **Survivorship Bias:** The data universe comprises 12 current Nifty large-caps. Historical constituents that were delisted or relegated to mid-caps are not included in the static snapshot.
-* **Intraday Market Impact:** Slippage is modeled using a fixed 7.5 bps parameter; non-linear square-root market impact models (Almgren-Chriss) based on intraday volume profiles represent a logical next step.
-* **Alternative Asset Classes:** The framework is currently tuned for Indian cash equity delivery; extending it to NSE Futures & Options (F&O) with rollover costs is planned for future iterations.
-
----
-
-## 7. Oral Defense (Viva) Quick Reference
-
-* **Why Meta-ML?** Predicting market direction on daily bars is near-impossible; predicting backtest fragility based on statistical and topological features is actionable and statistically robust.
-* **Why DSR?** Corrects for selection bias across multiple trials, return skewness, and fat tails via Extreme Value Theory and Euler-Mascheroni constant adjustments.
-* **Why $t+1$ Open?** Prevents lookahead bias by ensuring signals generated at market close are filled at the subsequent open.
-
+- [Bailey & López de Prado, Deflated Sharpe Ratio](https://davidhbailey.com/dhbpapers/deflated-sharpe.pdf)
+- [Bailey et al., Probability of Backtest Overfitting](https://www.davidhbailey.com/dhbpapers/backtest-prob.pdf)
+- [scikit-learn probability calibration](https://scikit-learn.org/stable/modules/calibration.html)
+- [SHAP TreeExplainer](https://shap.readthedocs.io/en/latest/generated/shap.TreeExplainer.html)
