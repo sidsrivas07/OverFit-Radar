@@ -11,6 +11,7 @@ import pandas as pd
 
 from overfit_radar.config import CostsConfig, ExperimentConfig
 from overfit_radar.costs.engine import BacktestEngine
+from overfit_radar.costs.windows import window_returns
 from overfit_radar.features.extractor import extract_window_features
 from overfit_radar.features.neighbourhood import build_neighbourhood_graph
 from overfit_radar.features.windows import generate_walk_forward_windows, WindowSlice
@@ -92,29 +93,12 @@ def build_strategy_dataset(
         logger.info(f"Processing {len(windows)} rolling walk-forward windows for {sym}...")
 
         for w in windows:
-            def window_returns(start, end):
-                # Reset execution to flat on the first bar; prior prices may warm indicators.
-                net = full_returns.iloc[start:end+1].copy()
-                costs = full_costs.iloc[start:end+1].copy()
-                actions = full_actions.iloc[start:end+1].copy()
-                positions = full_positions.iloc[start:end+1].copy()
-                net.iloc[0] = 0.; costs.iloc[0] = 0.; actions.iloc[0] = 0.
-                # On bar two the prior position is flat, even if the continuous run held.
-                factor = price_df.adjusted_close / price_df.close
-                intraday = price_df.adjusted_close.iloc[start+1] / (price_df.open.iloc[start+1]*factor.iloc[start+1]) - 1
-                buy = engine.cost_model.compute_cost_rate(price_df.index[start+1], True, engine.slippage_bps)
-                target = positions.iloc[1]
-                actions.iloc[1] = target
-                costs.iloc[1] = target * buy
-                net.iloc[1] = target * (intraday-buy)
-                terminal = positions.iloc[-1].copy()
-                sell = engine.cost_model.compute_cost_rate(price_df.index[end], False, engine.slippage_bps)
-                costs.iloc[-1] += terminal * sell
-                net.iloc[-1] -= terminal * sell
-                return net, costs, actions, terminal
-
-            rets_is, costs_is, actions_is, terminal_is = window_returns(w.is_start_idx, w.is_end_idx)
-            rets_oos, costs_oos, _, _ = window_returns(w.oos_start_idx, w.oos_end_idx)
+            rets_is, costs_is, actions_is, terminal_is = window_returns(
+                price_df, full_returns, full_costs, full_actions, full_positions,
+                w.is_start_idx, w.is_end_idx, engine)
+            rets_oos, costs_oos, _, _ = window_returns(
+                price_df, full_returns, full_costs, full_actions, full_positions,
+                w.oos_start_idx, w.oos_end_idx, engine)
 
             # Extract In-Sample Features
             features_df = extract_window_features(

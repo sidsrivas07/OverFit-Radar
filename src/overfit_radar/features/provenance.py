@@ -42,10 +42,12 @@ def save_versioned(table, directory):
 
 
 def load_training_table(path):
-    """Refuse stale data, code, config, commit or table bytes before training."""
+    """Refuse stale data, code, config or table bytes; Git HEAD is provenance only."""
     path=Path(path); manifest=json.loads(path.with_suffix('.manifest.json').read_text())
     current=fingerprint()
     for key,value in current.items():
+        if key in {'commit', 'commit_status'}:
+            continue  # A documentation-only commit does not change research inputs.
         if manifest.get(key)!=value:
             raise ValueError(f'Stale or mismatched dataset: {key}')
     if digest(path)!=manifest['dataset_sha256']:
