@@ -96,11 +96,14 @@ def test_check_split_adjustment_detects_unadjusted_plunge():
     assert check_split_adjustment(adjusted_df, split_date="2022-07-28", max_allowed_abs_return=0.20)
 
 
+@pytest.mark.integration
 def test_cached_benchmark_symbols_offline():
     """Verify that cached real benchmark symbols load offline and pass integrity checks."""
     from overfit_radar.config import get_project_root
     cache_dir = get_project_root() / "data" / "raw"
     parquet_files = list(cache_dir.glob("*.parquet"))
+    if not parquet_files:
+        pytest.skip('Market cache not present; run scripts/download_sample_universe.py for integration tests')
     assert len(parquet_files) >= 10, f"Expected at least 10 cached symbols, found {len(parquet_files)}"
 
     # Verify Tata Steel split adjustment on cached real data
