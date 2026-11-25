@@ -84,6 +84,11 @@ def probability_metrics(y,p,bins=10):
                 brier=float(brier_score_loss(y,p)),log_loss=float(log_loss(y,p,labels=[0,1])),ece=float(ece))
 
 
+def probability_references(fit: pd.DataFrame, index: pd.Index) -> pd.DataFrame:
+    """Constant and fitting-label prevalence references on the evaluation row index."""
+    return pd.DataFrame({'constant_05': 0.5, 'fit_prevalence': float(fit.survived.mean())},index=index)
+
+
 def bootstrap_summary(windows,config):
     keys=['experiment','cost_level','method'];metrics=['survival_rate','mean_oos_sharpe','spearman','auc','brier','ece']
     summaries=[];paired=[]
@@ -103,7 +108,7 @@ def bootstrap_summary(windows,config):
             wide=g.pivot(index='window_id',columns='method',values=metric).sort_index()
             models=[c for c in wide if c.endswith('_calibrated')]
             for model in models:
-                references=['is_sharpe','is_dsr_raw','random'] if metric not in ['brier','ece'] else []
+                references=['is_sharpe','is_dsr_raw','random'] if metric not in ['brier','ece'] else ['constant_05','fit_prevalence']
                 if '_full_' in model:references += [model.replace('_full_','_ablated_')]
                 for reference in references:
                     if reference not in wide:continue
@@ -146,7 +151,10 @@ def run(dataset: Path, output: Path, config_path: Path):
             assert test.oos_end_date.max()<pd.Timestamp(config['final_start'])
             folds.append(dict(fold=fold_id,experiment=experiment,family=fold.family,fit_rows=len(fit),fit_windows=fit.window_id.nunique(),calibration_rows=len(cal),test_rows=len(test),fit_label_end=str(fit.oos_end_date.max()),calibration_start=str(cal.oos_start_date.min()),calibration_label_end=str(cal.oos_end_date.max()),test_start=str(test.oos_start_date.min()),test_end=str(test.oos_end_date.max())))
             print(f'{fold_id}: fit={len(fit)}, cal={len(cal)}, test={len(test)}',flush=True)
-            scores=baseline_scores(test);probability_methods=[]
+            scores=baseline_scores(test)
+            references=probability_references(fit,test.index)
+            for name in references:scores[name]=references[name]
+            probability_methods=['constant_05','fit_prevalence']
             for kind in ['logistic','lightgbm']:
                 for neighbour in [True,False]:
                     name=f'{kind}_{"full" if neighbour else "ablated"}'

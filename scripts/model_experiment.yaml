@@ -1,4 +1,4 @@
-version: models-v1
+version: models-v2-probability-references
 seed: 42
 final_start: '2022-01-01'
 calibration: latest_available_window_sigmoid
